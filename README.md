@@ -16,9 +16,10 @@ func main() {
 	panicNotNil(err)
 	original, _, err := image.Decode(imageFile)
 	panicNotNil(err)
-
-	blurred := ficblur.Gaussian(original, 15, 2)
-
+	
+	blurred := new(image.RGBA)
+	ficblur.Gaussian(original, blurred, 15, 2)
+	
 	blurredFile, _ := os.Create("blurred.jpeg")
 	err = jpeg.Encode(blurredFile, blurred, nil)
 	panicNotNil(err)

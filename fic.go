@@ -5,24 +5,28 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+	"math/bits"
 )
 
 // Gaussian produces a blurred version of the image using a Gaussian function.
 // Sigma parameter must be positive and indicates how much the image will be blurred.
 // Passes parameter must be positive and indicates how many blur passes should be done.
-func Gaussian(img image.Image, sigma, boxes int) *image.RGBA {
-	src, ok := img.(*image.RGBA)
+func Gaussian(src image.Image, dst *image.RGBA, sigma, boxes int) {
+	rgbaSrc, ok := src.(*image.RGBA)
 	if !ok {
-		src = cloneToRGBA(img)
+		rgbaSrc = new(image.RGBA)
+		clone(src, rgbaSrc)
 	}
-	dst := cloneToRGBA(img)
+
+	if dst == nil {
+		panic("destination image must not be nil")
+	}
+	clone(rgbaSrc, dst)
 
 	for _, box := range sigma2BoxDimension(sigma, boxes) {
-		boxBlurHorizontal(dst, src, (box-1)/2)
-		boxBlurVertical(src, dst, (box-1)/2)
+		boxBlurHorizontal(dst, rgbaSrc, (box-1)/2)
+		boxBlurVertical(rgbaSrc, dst, (box-1)/2)
 	}
-
-	return dst
 }
 
 func boxBlurHorizontal(src, dst *image.RGBA, boxRadius int) {
@@ -233,10 +237,33 @@ func sigma2BoxDimension(sigma, boxes int) []int {
 	return sizes
 }
 
-// cloneToRGBA clones an image.Image to a *image.RGBA
-func cloneToRGBA(src image.Image) *image.RGBA {
+// clone clones src to dst
+func clone(src image.Image, dst *image.RGBA) {
 	b := src.Bounds()
-	dst := image.NewRGBA(b)
+	dst.Pix = make([]uint8, mul3NonNeg(4, b.Dx(), b.Dy()))
+	dst.Stride = 4 * b.Dx()
+	dst.Rect = b
+
 	draw.Draw(dst, b, src, b.Min, draw.Src)
-	return dst
+}
+
+// mul3NonNeg returns (x * y * z), unless at least one argument is negative or
+// if the computation overflows the int type, in which case it returns -1.
+func mul3NonNeg(x int, y int, z int) int {
+	if (x < 0) || (y < 0) || (z < 0) {
+		return -1
+	}
+	hi, lo := bits.Mul64(uint64(x), uint64(y))
+	if hi != 0 {
+		return -1
+	}
+	hi, lo = bits.Mul64(lo, uint64(z))
+	if hi != 0 {
+		return -1
+	}
+	a := int(lo)
+	if (a < 0) || (uint64(a) != lo) {
+		return -1
+	}
+	return a
 }
